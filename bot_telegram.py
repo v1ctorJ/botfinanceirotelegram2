@@ -4,12 +4,15 @@ import pandas as pd
 import os
 from datetime import datetime
 
+# Pega o token da variável de ambiente
+TOKEN = os.environ["TOKEN"]
+
 # Nome do arquivo baseado no mês atual
 def get_data_file():
     mes_atual = datetime.now().strftime("%Y_%m")
     return f"gastos_{mes_atual}.csv"
 
-# Garantir que existe arquivo CSV do mês
+# Garante que existe arquivo CSV do mês
 def init_csv():
     data_file = get_data_file()
     if not os.path.exists(data_file):
@@ -89,9 +92,6 @@ async def relatorio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(resposta)
 
 def main():
-    # 🔴 Substitua pelo TOKEN do BotFather
-    TOKEN = "8377569836:AAEdm-61MdfPF1McSczrzdiAMoBiOjgzAeE"
-
     app = Application.builder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
@@ -104,3 +104,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
