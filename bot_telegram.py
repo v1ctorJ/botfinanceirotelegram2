@@ -1,107 +1,65 @@
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
-import pandas as pd
 import os
+from telegram import Update
+from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
+import csv
 from datetime import datetime
 
-# Pega o token da variável de ambiente
-TOKEN = os.environ["TELEGRAM_TOKEN"]
+# pega o token do Render (ou local)
+TOKEN = os.environ.get("TELEGRAM_TOKEN")
 
-# Nome do arquivo baseado no mês atual
-def get_data_file():
-    mes_atual = datetime.now().strftime("%Y_%m")
-    return f"gastos_{mes_atual}.csv"
+# arquivo onde vamos guardar os gastos
+CSV_FILE = "gastos_telegram.csv"
 
-# Garante que existe arquivo CSV do mês
-def init_csv():
-    data_file = get_data_file()
-    if not os.path.exists(data_file):
-        df = pd.DataFrame(columns=["ChatID", "Categoria", "Valor", "Data"])
-        df.to_csv(data_file, index=False)
-    return data_file
+# garante que o arquivo existe com cabeçalho
+if not os.path.exists(CSV_FILE):
+    with open(CSV_FILE, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["data", "descricao", "valor"])
 
-# Registrar gasto no CSV
-def registrar_gasto(chat_id, categoria, valor):
-    data_file = init_csv()
-    df = pd.read_csv(data_file)
-
-    novo_gasto = pd.DataFrame(
-        [[chat_id, categoria, float(valor), datetime.now().strftime("%Y-%m-%d")]],
-        columns=["ChatID", "Categoria", "Valor", "Data"]
-    )
-
-    df = pd.concat([df, novo_gasto], ignore_index=True)
-    df.to_csv(data_file, index=False)
-
-# Calcular total de gastos no mês atual
-def total_gastos(chat_id):
-    data_file = init_csv()
-    df = pd.read_csv(data_file)
-    df_usuario = df[df["ChatID"] == chat_id]
-
-    if df_usuario.empty:
-        return "Nenhum gasto encontrado para você neste mês."
-    
-    total = df_usuario["Valor"].sum()
-    return f"💰 Seu total de gastos em {datetime.now().strftime('%m/%Y')} é: R$ {total:.2f}"
-
-# Relatório por categoria do mês atual
-def relatorio_gastos(chat_id):
-    data_file = init_csv()
-    df = pd.read_csv(data_file)
-    df_usuario = df[df["ChatID"] == chat_id]
-
-    if df_usuario.empty:
-        return "Nenhum gasto encontrado para gerar relatório deste mês."
-
-    resumo = df_usuario.groupby("Categoria")["Valor"].sum().reset_index()
-    total = df_usuario["Valor"].sum()
-
-    texto = f"📊 Relatório de Gastos - {datetime.now().strftime('%m/%Y')}\n\n"
-    for _, row in resumo.iterrows():
-        texto += f"- {row['Categoria']}: R$ {row['Valor']:.2f}\n"
-    texto += f"\n💰 Total geral: R$ {total:.2f}"
-
-    return texto
-
-# Comandos do bot
+# /start → mensagem de boas-vindas
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "Olá! 👋 Eu sou seu bot de controle de gastos.\n\n"
-        "📌 Comandos disponíveis:\n"
-        "👉 /gasto <categoria> <valor> → Registrar um gasto\n"
-        "👉 /total → Ver total acumulado do mês\n"
-        "👉 /relatorio → Ver resumo por categoria do mês atual"
-    )
+    await update.message.reply_text("Olá! Envie um gasto no formato: gasolina 100")
 
-async def gasto(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# registrar gastos → usuário digita "mercado 50"
+async def registrar_gasto(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    texto = update.message.text
+    partes = texto.split()
+    if len(partes) < 2:
+        await update.message.reply_text("Formato inválido. Use: descrição valor\nEx: pizza 40")
+        return
+
+    descricao = " ".join(partes[:-1])
     try:
-        categoria = context.args[0]
-        valor = context.args[1]
-        registrar_gasto(update.effective_chat.id, categoria, valor)
-        await update.message.reply_text(f"✅ Gasto de R$ {valor} em {categoria} registrado com sucesso!")
-    except (IndexError, ValueError):
-        await update.message.reply_text("⚠️ Uso incorreto!\nExemplo: /gasto mercado 250")
+        valor = float(partes[-1])
+    except ValueError:
+        await update.message.reply_text("O último item precisa ser um número (valor).")
+        return
 
+    with open(CSV_FILE, "a", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow([datetime.now().strftime("%Y-%m-%d"), descricao, valor])
+
+    await update.message.reply_text(f"Gasto registrado: {descricao} - R$ {valor:.2f}")
+
+# /total → soma dos gastos do mês
 async def total(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    resposta = total_gastos(update.effective_chat.id)
-    await update.message.reply_text(resposta)
+    total_gastos = 0
+    with open(CSV_FILE, "r", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            total_gastos += float(row["valor"])
+    await update.message.reply_text(f"Total de gastos: R$ {total_gastos:.2f}")
 
-async def relatorio(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    resposta = relatorio_gastos(update.effective_chat.id)
-    await update.message.reply_text(resposta)
-
+# rodar o bot
 def main():
     app = Application.builder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("gasto", gasto))
     app.add_handler(CommandHandler("total", total))
-    app.add_handler(CommandHandler("relatorio", relatorio))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, registrar_gasto))
 
-    print("🤖 Bot rodando... Pressione CTRL+C para parar.")
+    print("🤖 Bot rodando...")
     app.run_polling()
 
 if __name__ == "__main__":
     main()
-
