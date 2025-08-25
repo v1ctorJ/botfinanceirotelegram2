@@ -5,7 +5,7 @@ import os
 from datetime import datetime
 
 # Pega o token da variável de ambiente
-TOKEN = os.environ["TOKEN"]
+TOKEN = os.environ["8377569836:AAEdm-61MdfPF1McSczrzdiAMoBiOjgzAeE"]
 
 # Nome do arquivo baseado no mês atual
 def get_data_file():
