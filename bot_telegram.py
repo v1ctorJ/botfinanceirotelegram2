@@ -4,23 +4,17 @@ from telegram.ext import Application, CommandHandler, MessageHandler, ContextTyp
 import csv
 from datetime import datetime
 
-# pega o token do Render (ou local)
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
-
-# arquivo onde vamos guardar os gastos
 CSV_FILE = "gastos_telegram.csv"
 
-# garante que o arquivo existe com cabeçalho
 if not os.path.exists(CSV_FILE):
     with open(CSV_FILE, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(["data", "descricao", "valor"])
 
-# /start → mensagem de boas-vindas
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Olá! Envie um gasto no formato: gasolina 100")
 
-# registrar gastos → usuário digita "mercado 50"
 async def registrar_gasto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     texto = update.message.text
     partes = texto.split()
@@ -41,7 +35,6 @@ async def registrar_gasto(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(f"Gasto registrado: {descricao} - R$ {valor:.2f}")
 
-# /total → soma dos gastos do mês
 async def total(update: Update, context: ContextTypes.DEFAULT_TYPE):
     total_gastos = 0
     with open(CSV_FILE, "r", encoding="utf-8") as f:
@@ -50,10 +43,8 @@ async def total(update: Update, context: ContextTypes.DEFAULT_TYPE):
             total_gastos += float(row["valor"])
     await update.message.reply_text(f"Total de gastos: R$ {total_gastos:.2f}")
 
-# rodar o bot
 def main():
     app = Application.builder().token(TOKEN).build()
-
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("total", total))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, registrar_gasto))
@@ -63,3 +54,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
